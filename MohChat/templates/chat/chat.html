@@ -1,0 +1,168 @@
+{% extends "base.html" %} {% block content %}
+
+<style>
+  .chat-container {
+    max-width: 600px;
+    margin: auto;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 15px;
+    height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f9f9f9;
+  }
+
+  .chat-header {
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .message {
+    max-width: 60%;
+    padding: 10px;
+    border-radius: 10px;
+    word-wrap: break-word;
+    position: relative;
+  }
+
+  .sender-message {
+    align-self: flex-end;
+    background-color: #dcf8c6;
+    border-radius: 10px 10px 0 10px;
+  }
+
+  .receiver-message {
+    align-self: flex-start;
+    background-color: #e4e6eb;
+    border-radius: 10px 10px 10px 0;
+  }
+
+  .timestamp {
+    font-size: 0.75rem;
+    color: #777;
+    margin-top: 5px;
+    text-align: right;
+  }
+
+  .message-form {
+    display: flex;
+    gap: 10px;
+  }
+</style>
+
+<script>
+  let isUserScrolling = false;
+  let isFirstLoad = true;
+
+  const chatbox = document.getElementById("chatbox");
+
+  chatbox.addEventListener("scroll", () => {
+    isUserScrolling = chatbox.scrollTop + chatbox.clientHeight < chatbox.scrollHeight - 50;
+  });
+
+  function fetchMessages() {
+    fetch("{% url 'get_messages' r.username %}")
+      .then(response => response.json())
+      .then(data => {
+        const currentMessages = chatbox.querySelectorAll(".message").length;
+        if (data.messages.length !== currentMessages) {
+          chatbox.innerHTML = '';
+          data.messages.forEach(msg => {
+            const messageElement = document.createElement("div");
+            messageElement.classList.add("message");
+            if (msg.sender === "{{ request.user.username }}") {
+              messageElement.classList.add("sender-message");
+            } else {
+              messageElement.classList.add("receiver-message");
+            }
+            messageElement.innerHTML = `<p>${msg.content}</p><small class="timestamp">${msg.timestamp}</small>`;
+            chatbox.appendChild(messageElement);
+          });
+          if (!isUserScrolling || isFirstLoad) {
+            chatbox.scrollTop = chatbox.scrollHeight;
+            isFirstLoad = false;
+          }
+        }
+      })
+      .catch(error => {
+        console.error("Error fetching messages:", error);
+      });
+  }
+
+  window.onload = function() {
+    fetchMessages();
+    chatbox.scrollTop = chatbox.scrollHeight;
+  };
+
+  setInterval(fetchMessages, 1000);
+
+  document.getElementById("messageForm").onsubmit = function(event) {
+    event.preventDefault();
+    const msgInput = document.getElementById("messageInput");
+    const msg = msgInput.value;
+
+    if (msg.trim() !== "") {
+      fetch('', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: `msg=${encodeURIComponent(msg)}`
+      })
+      .then(response => {
+        msgInput.value = '';
+        fetchMessages();
+        chatbox.scrollTop = chatbox.scrollHeight;
+      }).catch(error => {
+        console.error("Error sending message:", error);
+      });
+    }
+  };
+</script>
+
+
+
+
+<div class="chat-container">
+  <div class="chat-header">
+    <h3 style="color: #4caf50;">Chat with {{ r.username }}</h3>
+  </div>
+
+  <div class="chat-messages" id="chatbox">
+    {% for message in messages %}
+      {% if message.sender == request.user %}
+        <div class="message sender-message">
+          <div>{{ message.content }}</div>
+          <div class="timestamp">{{ message.timestamp|date:"H:i" }}</div>
+        </div>
+      {% else %}
+        <div class="message receiver-message">
+          <div>{{ message.content }}</div>
+          <div class="timestamp">{{ message.timestamp|date:"H:i" }}</div>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <form action="#" method="post" class="message-form">
+    {% csrf_token %}
+    <input type="text" name="msg" placeholder="Type your message..." class="form-control" id="messageInput" required />
+    <button type="submit" class="btn btn-primary">Send</button>
+  </form>
+</div>
+
+{% endblock content %}
